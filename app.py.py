@@ -104,7 +104,6 @@ MENU_BASE = {
 # ==========================================
 st.sidebar.title("⚙️ Panel de Control")
 
-# Actualización del Dólar del día
 tasa_dolar = st.sidebar.number_input(
     "Tasa de Cambio del Día (VES/USD):", 
     min_value=1.0, 
@@ -117,7 +116,6 @@ st.title("🥗 NutriSalud Digital")
 st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']}")
 st.markdown("---")
 
-# Navegación Principal
 opcion = st.sidebar.radio(
     "Navegación", 
     ["🛒 Realizar Pedido", "📋 Pedidos en Cola", "👤 Registro de Clientes", "🏪 Directorio Aliados"]
@@ -139,7 +137,6 @@ if opcion == "🛒 Realizar Pedido":
         opciones_platos = [f"{p['nombre']} - ${p['precio_usd']:.2f} USD" for p in platos_disponibles]
         plato_seleccionado = st.selectbox("Seleccione el Platillo:", opciones_platos)
         
-        # Obtener objeto del plato seleccionado
         idx = opciones_platos.index(plato_seleccionado)
         plato_obj = platos_disponibles[idx]
         precio_ves = plato_obj["precio_usd"] * tasa_dolar
@@ -176,20 +173,16 @@ if opcion == "🛒 Realizar Pedido":
         if not nombre_cliente or not cedula_cliente or not ref_pago:
             st.error("Por favor complete los datos obligatorios del cliente y el número de referencia.")
         else:
-            # Obtener datos del restaurante asignado a ese estado
-            aliado = RESTAURANTE_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
+            aliado = RESTAURANTES_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
             
-            # Guardar en Base de Datos
             conn = sqlite3.connect('nutrisalud_database.db')
             c = conn.cursor()
             
-            # Registrar/Actualizar Cliente
             c.execute('''
                 INSERT OR REPLACE INTO clientes (nombre, cedula_rif, telefono, estado, patologia_principal)
                 VALUES (?, ?, ?, ?, ?)
             ''', (nombre_cliente, cedula_cliente, telefono_cliente, estado_destino, patologia))
             
-            # Registrar Pedido
             fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             c.execute('''
                 INSERT INTO pedidos (fecha, cliente_nombre, patologia, plato, restaurante_aliado, tipo_entrega, tiempo_espera, monto_usd, monto_ves, ref_pago, estatus)
@@ -202,7 +195,6 @@ if opcion == "🛒 Realizar Pedido":
             st.balloons()
             st.success("✅ Pedido registrado exitosamente en el sistema.")
             
-            # Construcción de Mensajes de WhatsApp
             mensaje_pedido = (
                 f"*[NUEVO PEDIDO NUTRISALUD DIGITAL]*\n\n"
                 f"👤 *Cliente:* {nombre_cliente} ({cedula_cliente})\n"
