@@ -280,5 +280,5 @@ elif opcion == "👤 Registro de Clientes":
 # ==========================================
 elif opcion == "🏪 Directorio Aliados":
     st.header("🏪 Cobertura y Red de Dark Kitchens Certificadas")
-    for estado, data in RESTAURANTE_ALIADOS.items():
+    for estado, data in RESTAURANTES_ALIADOS.items():
         st.write(f"• **{data['nombre']}** | Estado: {estado} | Contacto WhatsApp: `{data['telefono']}`")
