@@ -73,7 +73,7 @@ DATOS_ADMIN = {
     "banco": "Banco de Venezuela (0102)",
     "telefono": "04120582064",
     "email": "alimentoshchf4@gmail.com",
-    "password_admin": "Admin2026*"  # Contraseña para el panel administrativo
+    "password_admin": "Admin2026*"
 }
 
 ESTADOS_VENEZUELA = [
@@ -117,6 +117,8 @@ MENU_BASE = {
 # ==========================================
 # 3. CONTROL DE ACCESO (LOGIN DE ADMINISTRADOR)
 # ==========================================
+# Se actualiza aquí la llamada al nuevo logo de NutriSalud
+st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
 
 tasa_dolar = st.sidebar.number_input(
