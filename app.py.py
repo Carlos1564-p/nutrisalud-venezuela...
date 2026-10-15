@@ -91,19 +91,21 @@ DATOS_ADMIN = {
     "password_admin": "Admin2026*"
 }
 
+# Lista Oficial de las 24 Entidades Federales de Venezuela (23 Estados + Distrito Capital)
 ESTADOS_VENEZUELA = [
     "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", 
     "Carabobo", "Cojedes", "Delta Amacuro", "Distrito Capital", "Falcón", 
-    "Guárico", "Lara", "Mérida", "Miranda", "Monagas", "Nueva Esparta", 
-    "Portuguesa", "Sucre", "Táchira", "Trujillo", "La Guaira", "Yaracuy", "Zulia"
+    "Guárico", "La Guaira", "Lara", "Mérida", "Miranda", "Monagas", 
+    "Nueva Esparta", "Portuguesa", "Sucre", "Táchira", "Trujillo", "Yaracuy", "Zulia"
 ]
 
-# Función para cargar aliados desde la BD o usar los base por defecto
+# Función para cargar aliados desde la BD o utilizar el mapa base por defecto
 def obtener_restaurantes_aliados():
     conn = sqlite3.connect('nutrisalud_database.db')
     df = pd.read_sql_query("SELECT estado, nombre_comercial, telefono FROM restaurantes_afiliados", conn)
     conn.close()
     
+    # Aliados base asignados por defecto
     aliados = {
         "Distrito Capital": {"nombre": "NutriKitchen Chacao", "telefono": "04120582064"},
         "Carabobo": {"nombre": "Vida Sana El Viñedo", "telefono": "04124445566"},
@@ -112,12 +114,18 @@ def obtener_restaurantes_aliados():
         "Anzoátegui": {"nombre": "NutriSalud Puerto La Cruz", "telefono": "04248889900"}
     }
     
+    # Asignar Cocina Central para el resto de los estados si aún no tienen restaurante personalizado
+    for est in ESTADOS_VENEZUELA:
+        if est not in aliados:
+            aliados[est] = {"nombre": f"Cocina Matriz NutriSalud ({est})", "telefono": DATOS_ADMIN['telefono']}
+    
+    # Sobrescribir con los nuevos restaurantes registrados formalmente vía BD
     for _, row in df.iterrows():
         aliados[row['estado']] = {"nombre": row['nombre_comercial'], "telefono": row['telefono']}
     
     return aliados
 
-# Repertorio Ampliado con Módulo Fitness y Deportistas
+# Repertorio Completo de Menús
 MENU_BASE = {
     "Fitness y Deportistas / Alto Rendimiento": [
         {"nombre": "Power Bowl: Pechuga a la Plancha, Arroz Integral y Brócoli", "precio_usd": 7.50},
@@ -219,8 +227,7 @@ if opcion == "🛒 Realizar Pedido":
         cedula_cliente = st.text_input("Cédula o RIF:")
         telefono_cliente = st.text_input("Teléfono de Contacto (Ej: 04121234567):", help="Ingrese su número móvil para recibir la confirmación por WhatsApp.")
         
-        RESTAURANTES_ALIADOS = obtener_restaurantes_aliados()
-        estado_destino = st.selectbox("Estado de Venezuela:", list(RESTAURANTES_ALIADOS.keys()))
+        estado_destino = st.selectbox("Estado de Venezuela (24 Entidades):", ESTADOS_VENEZUELA)
         
         tipo_entrega = st.radio("Modalidad de Entrega:", ["Delivery a Domicilio", "Pick-Up / Sin Delivery (Retiro en Local)"])
         direccion = st.text_input("Dirección de Entrega / Notas:", "Retiro en Local" if "Sin Delivery" in tipo_entrega else "")
@@ -289,10 +296,11 @@ if opcion == "🛒 Realizar Pedido":
             
             mensaje_cliente = (
                 f"¡Hola *{nombre_cliente}*! 🥗\n\n"
-                f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para impulsar su rendimiento físico y garantizarle una vida más saludable.\n\n"
-                f"✅ *Hemos recibido su pago (Ref: {ref_pago})* y su pedido ya se encuentra **en proceso de elaboración** bajo estrictos estándares de calidad:\n\n"
+                f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para cuidar su salud y rendimiento físico.\n\n"
+                f"✅ *Hemos recibido su pago (Ref: {ref_pago})* y su pedido ya se encuentra **en proceso de elaboración** bajo estrictos estándares clínicos:\n\n"
                 f"🍽️ *Plato:* {plato_obj['nombre']}\n"
                 f"🏋️ *Objetivo:* {patologia}\n"
+                f"📍 *Estado:* {estado_destino}\n"
                 f"🛵 *Modalidad:* {tipo_entrega}\n"
                 f"⏳ *Tiempo estimado:* {tiempo_espera}\n\n"
                 f"Le estaremos notificando en cuanto su menú salga hacia su destino. ¡Gracias por confiar en nuestra tecnología y compromiso nutricional!"
@@ -445,7 +453,7 @@ elif opcion == "📄 Contrato Marco de Adhesión" and es_admin:
     st.header("📄 Contrato Marco de Adhesión, Comisiones y Responsabilidad Sanitaria B2B")
     st.markdown(
         f"""
-        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS HEALTHERS / RESTAURANTES ALIADOS
+        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS RESTAURANTES ALIADOS
         **COMPANIA HCHFA CA (RIF: J-404509216)**
         
         ---
