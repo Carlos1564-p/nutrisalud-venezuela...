@@ -13,10 +13,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar Base de Datos SQLite
+# Inicializar Base de Datos SQLite y Migración Automática
 def init_db():
     conn = sqlite3.connect('nutrisalud_database.db')
     c = conn.cursor()
+    
     # Tabla de Clientes
     c.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
@@ -28,6 +29,7 @@ def init_db():
             patologia_principal TEXT
         )
     ''')
+    
     # Tabla de Pedidos
     c.execute('''
         CREATE TABLE IF NOT EXISTS pedidos (
@@ -47,6 +49,16 @@ def init_db():
             estatus TEXT
         )
     ''')
+    
+    # Verificar y actualizar columnas si la base de datos es de una versión anterior
+    c.execute("PRAGMA table_info(pedidos);")
+    columnas_existentes = [col[1] for col in c.fetchall()]
+    
+    if "comision_plataforma_usd" not in columnas_existentes:
+        c.execute("ALTER TABLE pedidos ADD COLUMN comision_plataforma_usd REAL DEFAULT 0.0;")
+    if "pago_neto_aliado_usd" not in columnas_existentes:
+        c.execute("ALTER TABLE pedidos ADD COLUMN pago_neto_aliado_usd REAL DEFAULT 0.0;")
+        
     conn.commit()
     conn.close()
 
@@ -61,7 +73,7 @@ DATOS_ADMIN = {
     "banco": "Banco de Venezuela (0102)",
     "telefono": "04120582064",
     "email": "alimentoshchf4@gmail.com",
-    "password_admin": "Admin2026*"  # Contraseña secreta para ver módulos administrativos
+    "password_admin": "Admin2026*"  # Contraseña para el panel administrativo
 }
 
 ESTADOS_VENEZUELA = [
@@ -105,7 +117,6 @@ MENU_BASE = {
 # ==========================================
 # 3. CONTROL DE ACCESO (LOGIN DE ADMINISTRADOR)
 # ==========================================
-st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
 
 tasa_dolar = st.sidebar.number_input(
