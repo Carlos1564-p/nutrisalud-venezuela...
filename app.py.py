@@ -117,7 +117,6 @@ MENU_BASE = {
 # ==========================================
 # 3. CONTROL DE ACCESO (LOGIN DE ADMINISTRADOR)
 # ==========================================
-# Se actualiza aquí la llamada al nuevo logo de NutriSalud
 st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
 
@@ -180,7 +179,7 @@ if opcion == "🛒 Realizar Pedido":
         st.subheader("2. Datos del Cliente y Entrega")
         nombre_cliente = st.text_input("Nombre Completo:")
         cedula_cliente = st.text_input("Cédula o RIF:")
-        telefono_cliente = st.text_input("Teléfono de Contacto (WhatsApp):")
+        telefono_cliente = st.text_input("Teléfono de Contacto (Ej: 04121234567):", help="Ingrese su número móvil para recibir la confirmación por WhatsApp.")
         estado_destino = st.selectbox("Estado de Venezuela:", ESTADOS_VENEZUELA)
         
         tipo_entrega = st.radio("Modalidad de Entrega:", ["Delivery a Domicilio", "Pick-Up / Sin Delivery (Retiro en Local)"])
@@ -203,8 +202,8 @@ if opcion == "🛒 Realizar Pedido":
     ref_pago = st.text_input("Número de Referencia Pagomóvil BDV:")
 
     if st.button("🚀 Procesar Pedido y Enviar a WhatsApp"):
-        if not nombre_cliente or not cedula_cliente or not ref_pago:
-            st.error("Por favor complete los datos obligatorios del cliente y el número de referencia.")
+        if not nombre_cliente or not cedula_cliente or not telefono_cliente or not ref_pago:
+            st.error("Por favor complete todos los campos obligatorios, incluyendo su teléfono de contacto y referencia.")
         else:
             aliado = RESTAURANTES_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
             
@@ -230,9 +229,10 @@ if opcion == "🛒 Realizar Pedido":
             conn.close()
             
             st.balloons()
-            st.success("✅ Pedido registrado exitosamente en el sistema central.")
+            st.success("✅ ¡Pedido registrado exitosamente en el sistema central!")
             
-            mensaje_pedido = (
+            # Mensaje para el Restaurante Aliado
+            mensaje_aliado = (
                 f"*[NUEVO PEDIDO NUTRISALUD DIGITAL]*\n\n"
                 f"👤 *Cliente:* {nombre_cliente} ({cedula_cliente})\n"
                 f"🍽️ *Plato:* {plato_obj['nombre']}\n"
@@ -244,17 +244,40 @@ if opcion == "🛒 Realizar Pedido":
                 f"💵 *Monto Total:* ${monto_usd:.2f} USD ({precio_ves:,.2f} VES)\n"
                 f"💳 *Ref BDV Central:* {ref_pago}\n"
                 f"🍳 *Cocina Asignada:* {aliado['nombre']}\n"
-                f"💼 *Liquidación a transferir al Aliado:* ${pago_neto_aliado:.2f} USD (Neto 90%)"
+                f"💼 *Liquidación Neta Aliado (90%):* ${pago_neto_aliado:.2f} USD"
             )
             
-            url_wsp_aliado = f"https://wa.me/58{aliado['telefono'][1:]}?text={urllib.parse.quote(mensaje_pedido)}"
-            url_wsp_admin = f"https://wa.me/58{DATOS_ADMIN['telefono'][1:]}?text={urllib.parse.quote(mensaje_pedido)}"
+            # Mensaje de Agradecimiento y Confirmación para el Cliente
+            mensaje_cliente = (
+                f"¡Hola *{nombre_cliente}*! 🥗\n\n"
+                f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para cuidar su salud y garantizarle una vida más saludable y equilibrada.\n\n"
+                f"✅ *Hemos recibido su pago (Ref: {ref_pago})* y su pedido ya se encuentra **en proceso de elaboración** bajo estrictos estándares clínicos:\n\n"
+                f"🍽️ *Plato:* {plato_obj['nombre']}\n"
+                f"🩺 *Condición:* {patologia}\n"
+                f"🛵 *Modalidad:* {tipo_entrega}\n"
+                f"⏳ *Tiempo estimado:* {tiempo_espera}\n\n"
+                f"Le estaremos notificando en cuanto su menú salga hacia su destino. ¡Gracias por confiar en nuestra tecnología y compromiso nutricional!"
+            )
+            
+            url_wsp_aliado = f"https://wa.me/58{aliado['telefono'][1:]}?text={urllib.parse.quote(mensaje_aliado)}"
+            url_wsp_admin = f"https://wa.me/58{DATOS_ADMIN['telefono'][1:]}?text={urllib.parse.quote(mensaje_aliado)}"
+            
+            # Formatear teléfono del cliente para WhatsApp (remover espacios o ceros iniciales si los tuviera)
+            tel_cliente_limpio = telefono_cliente.strip()
+            if tel_cliente_limpio.startswith("0"):
+                tel_cliente_limpio = tel_cliente_limpio[1:]
+            url_wsp_cliente = f"https://wa.me/58{tel_cliente_limpio}?text={urllib.parse.quote(mensaje_cliente)}"
 
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                st.markdown(f"[📲 **Notificar a la Cocina Aliada ({aliado['nombre']})**]({url_wsp_aliado})")
-            with col_btn2:
-                st.markdown(f"[🏢 **Enviar Copia de Auditoría a Administración**]({url_wsp_admin})")
+            st.markdown("### 📲 Acciones de Notificación por WhatsApp")
+            st.write("Haga clic en los siguientes botones para enviar los mensajes correspondientes:")
+            
+            col_b1, col_b2, col_b3 = st.columns(3)
+            with col_b1:
+                st.markdown(f"[📲 **Notificar al Aliado**]({url_wsp_aliado})")
+            with col_b2:
+                st.markdown(f"[💬 **Enviar Mensaje de Agradecimiento al Cliente**]({url_wsp_cliente})")
+            with col_b3:
+                st.markdown(f"[🏢 **Copia de Auditoría Admin**]({url_wsp_admin})")
 
 # ==========================================
 # 5. MÓDULO PRIVADO: PEDIDOS EN COLA & LIQUIDACIONES
