@@ -108,7 +108,6 @@ MENU_BASE = {
 st.sidebar.image("Logo Agrodigitalvenezueladeinitivo.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
 
-# Control de Tasa de Cambio (Visible o editable con clave o por defecto)
 tasa_dolar = st.sidebar.number_input(
     "Tasa de Cambio del Día (VES/USD):", 
     min_value=1.0, 
@@ -129,7 +128,6 @@ if modo_usuario == "Administración Central":
     elif pwd_ingresada != "":
         st.sidebar.error("❌ Contraseña incorrecta")
 
-# Navegación condicional según rol
 if es_admin:
     opcion = st.sidebar.radio(
         "Módulos de Gestión", 
@@ -137,10 +135,8 @@ if es_admin:
     )
 else:
     opcion = "🛒 Realizar Pedido"
-    if modo_usuario == "Administración Central":
-        st.sidebar.warning("⚠️ Ingrese la contraseña correcta para ver los módulos administrativos.")
 
-st.title("logonutrisalud.png")
+st.title("🥗 NutriSalud Digital")
 st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']}")
 st.markdown("---")
 
@@ -199,7 +195,6 @@ if opcion == "🛒 Realizar Pedido":
         else:
             aliado = RESTAURANTES_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
             
-            # Cálculos financieros del negocio (10% comisión plataforma, 90% pago neto al restaurante)
             monto_usd = plato_obj['precio_usd']
             comision_plataforma = monto_usd * 0.10
             pago_neto_aliado = monto_usd * 0.90
@@ -304,8 +299,8 @@ elif opcion == "👤 Registro de Clientes" and es_admin:
 elif opcion == "📄 Contrato y Acuerdos Comerciales" and es_admin:
     st.header("📄 Contrato Marco de Confidencialidad, Garantía de Pagos y Comisiones")
     st.markdown(
-        f"""
-        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS HEALTHERS / RESTAURANTES ALIADOS
+        """
+        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS RESTAURANTES ALIADOS
         **COMPANIA HCHFA CA (RIF: J-404509216)**
         
         ---
@@ -316,11 +311,12 @@ elif opcion == "📄 Contrato y Acuerdos Comerciales" and es_admin:
         **2. MODELO FINANCIERO Y COMISIONES (10%):**  
         * **Cobro Centralizado:** Todo pago efectuado por el paciente final ingresa de forma centralizada a la cuenta de **COMPANIA HCHFA CA**.
         * **Comisión de la Plataforma:** La plataforma retiene un **10%** del valor total del plato por concepto de articulación de demanda, marketing nacional, pasarela tecnológica y soporte logístico.
-        * **Liquidación al Aliado (90%):** La empresa transferirá el **90%** restante al restaurante aliado correspondiente, según los acuerdos de liquidación acordados (diarios o semanales), respaldados mediante comprobantes de pago verificados.
+        * **Liquidación al Aliado (90%):** La empresa transferirá el **90%** restante al restaurante aliado correspondiente, según los acuerdos de liquidación acordados, respaldados mediante comprobantes de pago verificados.
 
         **3. CONFIDENCIALIDAD Y PROTECCIÓN DE DATOS:**  
         * Las partes se comprometen a mantener estricta confidencialidad sobre la base de datos de pacientes, historiales clínicos, recetas médicas y volúmenes de transacciones gestionados a través del sistema. Queda prohibida la divulgación o uso comercial externo de dicha información.
 
         **4. GARANTÍA DE CALIDAD Y TIEMPOS:**  
-        * El restaurante aliado garantiza la elaboración de los menús conforme a las especificaciones clínicas (Diabetes, Renal, Hipertensión, Celiaquía) y respetando los tiempos de espera seleccionados por el cliente o la modalidad de entrega (Con o sin delivery).
+        * El restaurante aliado garantiza la elaboración de los menús conforme a las especificaciones clínicas (Diabetes, Renal, Hipertensión, Celiaquía) y respetando los tiempos de espera seleccionados por el cliente o la modalidad de entrega.
         """
+    )
