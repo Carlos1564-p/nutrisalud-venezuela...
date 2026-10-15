@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar Base de Datos SQLite y Migración Automática
+# Inicializar Base de Datos SQLite y Estructuras de Costos
 def init_db():
     conn = sqlite3.connect('nutrisalud_database.db')
     c = conn.cursor()
@@ -30,7 +30,7 @@ def init_db():
         )
     ''')
     
-    # Tabla de Restaurantes Aliados (Afiliados formalmente)
+    # Tabla de Restaurantes Aliados
     c.execute('''
         CREATE TABLE IF NOT EXISTS restaurantes_afiliados (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +45,39 @@ def init_db():
         )
     ''')
     
+    # Tabla de Catálogo de Menús y Costos (Modificable por Admin)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS menu_platos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT NOT NULL,
+            nombre_plato TEXT NOT NULL,
+            precio_usd REAL NOT NULL
+        )
+    ''')
+    
+    # Poblar menú inicial si está vacío
+    c.execute("SELECT COUNT(*) FROM menu_platos")
+    if c.fetchone()[0] == 0:
+        menu_inicial = [
+            ("Fitness y Deportistas / Alto Rendimiento", "Power Bowl: Pechuga a la Plancha, Arroz Integral y Brócoli", 7.50),
+            ("Fitness y Deportistas / Alto Rendimiento", "Filet de Res Lean con Puré de Batata y Espinaca", 9.00),
+            ("Fitness y Deportistas / Alto Rendimiento", "Tortilla Proteica de Claras, Avena y Frutos Rojos", 5.50),
+            ("Fitness y Deportistas / Alto Rendimiento", "Salmón Grillado con Quínoa y Espárragos", 10.00),
+            ("Diabetes Tipo 2", "Bowl de Quinua y Pechuga al Limón", 6.50),
+            ("Diabetes Tipo 2", "Salmón al Horno con Vegetales", 8.00),
+            ("Diabetes Tipo 2", "Pechuga en Reducción de Balsámico", 7.00),
+            ("Enfermedad Renal Crónica", "Crema de Calabacín (Bajo Potasio)", 5.00),
+            ("Enfermedad Renal Crónica", "Pollo Acorazonado con Arroz Blanco", 6.00),
+            ("Enfermedad Renal Crónica", "Tortilla de Claras con Zanahoria", 4.50),
+            ("Hipertensión Severa", "Ensalada Mediterránea de Oliva", 5.50),
+            ("Hipertensión Severa", "Pavo a las Finas Hierbas", 7.00),
+            ("Hipertensión Severa", "Crema suave de Auyama sin Sal", 5.00),
+            ("Celiaquía / Sin Gluten", "Pasta de Garbanzos con Pesto", 6.80),
+            ("Celiaquía / Sin Gluten", "Milanesa de Pollo con Harina de Yuca", 6.20),
+            ("Celiaquía / Sin Gluten", "Risotto de Hongos Portobello", 8.00)
+        ]
+        c.executemany("INSERT INTO menu_platos (categoria, nombre_plato, precio_usd) VALUES (?, ?, ?)", menu_inicial)
+
     # Tabla de Pedidos
     c.execute('''
         CREATE TABLE IF NOT EXISTS pedidos (
@@ -65,10 +98,9 @@ def init_db():
         )
     ''')
     
-    # Verificar y actualizar columnas si la base de datos es de una versión anterior
+    # Migración de columnas de pedidos si es necesario
     c.execute("PRAGMA table_info(pedidos);")
     columnas_existentes = [col[1] for col in c.fetchall()]
-    
     if "comision_plataforma_usd" not in columnas_existentes:
         c.execute("ALTER TABLE pedidos ADD COLUMN comision_plataforma_usd REAL DEFAULT 0.0;")
     if "pago_neto_aliado_usd" not in columnas_existentes:
@@ -80,7 +112,7 @@ def init_db():
 init_db()
 
 # ==========================================
-# 2. DATOS DE CONFIGURACIÓN Y CONSTANTES
+# 2. CONFIGURACIÓN Y CONSTANTES
 # ==========================================
 DATOS_ADMIN = {
     "empresa": "COMPANIA HCHFA CA (Alimentos HCHF4 CA)",
@@ -91,7 +123,6 @@ DATOS_ADMIN = {
     "password_admin": "Admin2026*"
 }
 
-# Lista Oficial de las 24 Entidades Federales de Venezuela (23 Estados + Distrito Capital)
 ESTADOS_VENEZUELA = [
     "Amazonas", "Anzoátegui", "Apure", "Aragua", "Barinas", "Bolívar", 
     "Carabobo", "Cojedes", "Delta Amacuro", "Distrito Capital", "Falcón", 
@@ -99,13 +130,11 @@ ESTADOS_VENEZUELA = [
     "Nueva Esparta", "Portuguesa", "Sucre", "Táchira", "Trujillo", "Yaracuy", "Zulia"
 ]
 
-# Función para cargar aliados desde la BD o utilizar el mapa base por defecto
 def obtener_restaurantes_aliados():
     conn = sqlite3.connect('nutrisalud_database.db')
     df = pd.read_sql_query("SELECT estado, nombre_comercial, telefono FROM restaurantes_afiliados", conn)
     conn.close()
     
-    # Aliados base asignados por defecto
     aliados = {
         "Distrito Capital": {"nombre": "NutriKitchen Chacao", "telefono": "04120582064"},
         "Carabobo": {"nombre": "Vida Sana El Viñedo", "telefono": "04124445566"},
@@ -114,62 +143,36 @@ def obtener_restaurantes_aliados():
         "Anzoátegui": {"nombre": "NutriSalud Puerto La Cruz", "telefono": "04248889900"}
     }
     
-    # Asignar Cocina Central para el resto de los estados si aún no tienen restaurante personalizado
     for est in ESTADOS_VENEZUELA:
         if est not in aliados:
             aliados[est] = {"nombre": f"Cocina Matriz NutriSalud ({est})", "telefono": DATOS_ADMIN['telefono']}
-    
-    # Sobrescribir con los nuevos restaurantes registrados formalmente vía BD
+            
     for _, row in df.iterrows():
         aliados[row['estado']] = {"nombre": row['nombre_comercial'], "telefono": row['telefono']}
-    
+        
     return aliados
 
-# Repertorio Completo de Menús
-MENU_BASE = {
-    "Fitness y Deportistas / Alto Rendimiento": [
-        {"nombre": "Power Bowl: Pechuga a la Plancha, Arroz Integral y Brócoli", "precio_usd": 7.50},
-        {"nombre": "Filet de Res Lean con Puré de Batata y Espinaca", "precio_usd": 9.00},
-        {"nombre": "Tortilla Proteica de Claras, Avena y Frutos Rojos", "precio_usd": 5.50},
-        {"nombre": "Salmón Grillado con Quínoa y Espárragos", "precio_usd": 10.00}
-    ],
-    "Diabetes Tipo 2": [
-        {"nombre": "Bowl de Quinua y Pechuga al Limón", "precio_usd": 6.50},
-        {"nombre": "Salmón al Horno con Vegetales", "precio_usd": 8.00},
-        {"nombre": "Pechuga en Reducción de Balsámico", "precio_usd": 7.00}
-    ],
-    "Enfermedad Renal Crónica": [
-        {"nombre": "Crema de Calabacín (Bajo Potasio)", "precio_usd": 5.00},
-        {"nombre": "Pollo Acorazonado con Arroz Blanco", "precio_usd": 6.00},
-        {"nombre": "Tortilla de Claras con Zanahoria", "precio_usd": 4.50}
-    ],
-    "Hipertensión Severa": [
-        {"nombre": "Ensalada Mediterránea de Oliva", "precio_usd": 5.50},
-        {"nombre": "Pavo a las Finas Hierbas", "precio_usd": 7.00},
-        {"nombre": "Crema suave de Auyama sin Sal", "precio_usd": 5.00}
-    ],
-    "Celiaquía / Sin Gluten": [
-        {"nombre": "Pasta de Garbanzos con Pesto", "precio_usd": 6.80},
-        {"nombre": "Milanesa de Pollo con Harina de Yuca", "precio_usd": 6.20},
-        {"nombre": "Risotto de Hongos Portobello", "precio_usd": 8.00}
-    ]
-}
+def obtener_menu_desde_db():
+    conn = sqlite3.connect('nutrisalud_database.db')
+    df = pd.read_sql_query("SELECT * FROM menu_platos", conn)
+    conn.close()
+    
+    menu = {}
+    for cat in df['categoria'].unique():
+        platos = df[df['categoria'] == cat]
+        menu[cat] = [{"nombre": row['nombre_plato'], "precio_usd": row['precio_usd'], "id": row['id']} for _, row in platos.iterrows()]
+    return menu
 
 # ==========================================
-# 3. CONTROL DE ACCESO (LOGIN DE ADMINISTRADOR)
+# 3. CONTROL DE ACCESO Y TASA BCV
 # ==========================================
 st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
 
-tasa_dolar = st.sidebar.number_input(
-    "Tasa de Cambio del Día (VES/USD):", 
-    min_value=1.0, 
-    value=36.50, 
-    step=0.50
-)
+# Control de Tasa del Dólar BCV (Por defecto o modificable por Admin)
+if 'tasa_bcv' not in st.session_state:
+    st.session_state.tasa_bcv = 36.50
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("Acceso a Módulos")
 modo_usuario = st.sidebar.radio("Seleccione Perfil:", ["Público (Clientes)", "Administración Central"])
 
 es_admin = False
@@ -182,20 +185,32 @@ if modo_usuario == "Administración Central":
         st.sidebar.error("❌ Contraseña incorrecta")
 
 if es_admin:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("⚙️ Configuración Admin")
+    st.session_state.tasa_bcv = st.sidebar.number_input(
+        "Modificar Tasa del Dólar BCV (VES):", 
+        min_value=1.0, 
+        value=st.session_state.tasa_bcv, 
+        step=0.50
+    )
+    
     opcion = st.sidebar.radio(
         "Módulos de Gestión", 
         [
             "📋 Pedidos en Cola & Liquidaciones", 
             "👤 Registro de Clientes", 
-            "🤝 Módulo de Afiliación y Contratos B2B", 
+            "⚙️ Gestión de Menús y Costos", 
+            "🤝 Módulo de Afiliación B2B", 
             "📄 Contrato Marco de Adhesión"
         ]
     )
 else:
     opcion = "🛒 Realizar Pedido"
+    st.sidebar.markdown("---")
+    st.sidebar.info(f"📊 **Tasa Oficial BCV del Día:** {st.session_state.tasa_bcv:,.2f} VES/USD")
 
 st.title("🥗 NutriSalud Digital")
-st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']}")
+st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']} | Tasa BCV Oficial: {st.session_state.tasa_bcv:,.2f} VES/USD")
 st.markdown("---")
 
 # ==========================================
@@ -203,7 +218,9 @@ st.markdown("---")
 # ==========================================
 if opcion == "🛒 Realizar Pedido":
     st.header("🛒 Módulo de Pedidos Terapéuticos y Fitness")
-    st.info("💡 Su pago es procesado de forma centralizada y segura a través de la cuenta matriz de la empresa. La plataforma articula de forma automatizada la elaboración con la cocina aliada correspondiente.")
+    st.info(f"💡 Pagos centralizados a través de {DATOS_ADMIN['empresa']}. Tasa de conversión aplicada: {st.session_state.tasa_bcv:,.2f} VES por USD.")
+    
+    MENU_BASE = obtener_menu_desde_db()
     
     col1, col2 = st.columns(2)
     
@@ -217,7 +234,7 @@ if opcion == "🛒 Realizar Pedido":
         
         idx = opciones_platos.index(plato_seleccionado)
         plato_obj = platos_disponibles[idx]
-        precio_ves = plato_obj["precio_usd"] * tasa_dolar
+        precio_ves = plato_obj["precio_usd"] * st.session_state.tasa_bcv
         
         st.success(f"💰 **Precio Ref:** ${plato_obj['precio_usd']:.2f} USD | **Total a Pagar:** {precio_ves:,.2f} VES")
 
@@ -315,22 +332,19 @@ if opcion == "🛒 Realizar Pedido":
             url_wsp_cliente = f"https://wa.me/58{tel_cliente_limpio}?text={urllib.parse.quote(mensaje_cliente)}"
 
             st.markdown("### 📲 Acciones de Notificación por WhatsApp")
-            st.write("Haga clic en los siguientes botones para enviar los mensajes correspondientes:")
-            
             col_b1, col_b2, col_b3 = st.columns(3)
             with col_b1:
                 st.markdown(f"[📲 **Notificar al Aliado**]({url_wsp_aliado})")
             with col_b2:
-                st.markdown(f"[💬 **Enviar Mensaje de Agradecimiento al Cliente**]({url_wsp_cliente})")
+                st.markdown(f"[💬 **Agradecimiento al Cliente**]({url_wsp_cliente})")
             with col_b3:
                 st.markdown(f"[🏢 **Copia de Auditoría Admin**]({url_wsp_admin})")
 
 # ==========================================
-# 5. MÓDULO PRIVADO: PEDIDOS EN COLA & LIQUIDACIONES
+# 5. MÓDULO PRIVADO: PEDIDOS EN COLA
 # ==========================================
 elif opcion == "📋 Pedidos en Cola & Liquidaciones" and es_admin:
     st.header("📋 Monitoreo de Pedidos, Estatus y Liquidación a Aliados")
-    st.write("Vista exclusiva para Administración. Control de pagos netos a restaurantes (90%) y retención de comisión (10%).")
     
     conn = sqlite3.connect('nutrisalud_database.db')
     df_pedidos = pd.read_sql_query("SELECT * FROM pedidos ORDER BY id DESC", conn)
@@ -339,7 +353,6 @@ elif opcion == "📋 Pedidos en Cola & Liquidaciones" and es_admin:
     if not df_pedidos.empty:
         st.dataframe(df_pedidos, use_container_width=True)
         
-        st.subheader("Gestión de Estatus y Liquidación")
         col_id, col_estatus, col_btn = st.columns(3)
         with col_id:
             pedido_id = st.number_input("ID del Pedido:", min_value=int(df_pedidos['id'].min()), max_value=int(df_pedidos['id'].max()), step=1)
@@ -357,120 +370,105 @@ elif opcion == "📋 Pedidos en Cola & Liquidaciones" and es_admin:
                 st.success(f"Pedido #{pedido_id} actualizado a {nuevo_estatus}")
                 st.rerun()
     else:
-        st.info("No hay pedidos registrados en la base de datos.")
+        st.info("No hay pedidos registrados.")
 
 # ==========================================
 # 6. MÓDULO PRIVADO: REGISTRO DE CLIENTES
 # ==========================================
 elif opcion == "👤 Registro de Clientes" and es_admin:
     st.header("👤 Base de Datos Activa de Clientes Registrados")
-    
     conn = sqlite3.connect('nutrisalud_database.db')
     df_clientes = pd.read_sql_query("SELECT * FROM clientes", conn)
     conn.close()
-    
     if not df_clientes.empty:
         st.dataframe(df_clientes, use_container_width=True)
-        st.caption(f"Total de clientes activos registrados: {len(df_clientes)}")
     else:
-        st.info("Aún no hay clientes registrados en la base de datos.")
+        st.info("Aún no hay clientes registrados.")
 
 # ==========================================
-# 7. MÓDULO PRIVADO: AFILIACIÓN Y CONTRATOS B2B
+# 7. MÓDULO PRIVADO: GESTIÓN DE MENÚS Y COSTOS (NUEVO)
 # ==========================================
-elif opcion == "🤝 Módulo de Afiliación y Contratos B2B" and es_admin:
-    st.header("🤝 Módulo de Afiliación Digital de Restaurantes y Dark Kitchens")
-    st.write("Registro oficial de nuevos locales aliados bajo el Contrato Marco de Adhesión, Inocuidad Alimentaria y Comisiones (90/10).")
+elif opcion == "⚙️ Gestión de Menús y Costos" and es_admin:
+    st.header("⚙️ Modificación de Estructura de Costos por Plato")
+    st.write("Actualice el precio referencial en USD de cada platillo terapéutico o fitness en tiempo real.")
     
+    conn = sqlite3.connect('nutrisalud_database.db')
+    df_menu = pd.read_sql_query("SELECT * FROM menu_platos", conn)
+    conn.close()
+    
+    st.dataframe(df_menu, use_container_width=True)
+    
+    st.markdown("---")
+    st.subheader("✏️ Editar Precio de Platillo Individual")
+    
+    with st.form("form_editar_precio"):
+        plato_a_editar = st.selectbox("Seleccione el Platillo:", df_menu['nombre_plato'].tolist())
+        
+        # Buscar precio actual
+        precio_actual = float(df_menu[df_menu['nombre_plato'] == plato_a_editar]['precio_usd'].values[0])
+        nuevo_precio_usd = st.number_input("Nuevo Precio en USD ($):", min_value=0.50, value=precio_actual, step=0.50)
+        
+        btn_actualizar_precio = st.form_submit_button("💾 Actualizar Estructura de Costo")
+        
+        if btn_actualizar_precio:
+            conn = sqlite3.connect('nutrisalud_database.db')
+            c = conn.cursor()
+            c.execute("UPDATE menu_platos SET precio_usd = ? WHERE nombre_plato = ?", (nuevo_precio_usd, plato_a_editar))
+            conn.commit()
+            conn.close()
+            st.success(f"✅ ¡Precio del plato '{plato_a_editar}' actualizado exitosamente a ${nuevo_precio_usd:.2f} USD!")
+            st.rerun()
+
+# ==========================================
+# 8. MÓDULO PRIVADO: AFILIACIÓN B2B
+# ==========================================
+elif opcion == "🤝 Módulo de Afiliación B2B" and es_admin:
+    st.header("🤝 Módulo de Afiliación Digital de Restaurantes y Dark Kitchens")
     with st.form("form_afiliacion"):
-        st.subheader("Datos del Establecimiento Comercial / Aliado")
         col_f1, col_f2 = st.columns(2)
-        
         with col_f1:
-            nombre_comercial = st.text_input("Nombre Comercial del Restaurante / Dark Kitchen:")
-            rif_restaurante = st.text_input("RIF del Establecimiento (Ej: J-12345678-9):")
-            representante_legal = st.text_input("Nombre del Representante Legal:")
-            
+            nombre_comercial = st.text_input("Nombre Comercial del Restaurante:")
+            rif_restaurante = st.text_input("RIF del Establecimiento:")
+            representante_legal = st.text_input("Representante Legal:")
         with col_f2:
-            estado_operacion = st.selectbox("Estado de Operación (Cobertura):", ESTADOS_VENEZUELA)
-            telefono_contacto = st.text_input("Teléfono Móvil / WhatsApp del Local:")
-            email_contacto = st.text_input("Correo Electrónico Corporativo:")
+            estado_operacion = st.selectbox("Estado de Operación:", ESTADOS_VENEZUELA)
+            telefono_contacto = st.text_input("Teléfono / WhatsApp:")
+            email_contacto = st.text_input("Correo Electrónico:")
             
-        st.markdown("---")
-        st.subheader("📜 Cláusula de Adhesión, Sanidad y Responsabilidad Legal")
-        st.info(
-            """
-            Al registrar y afiliar este establecimiento, el Representante Legal declara conocer y aceptar irrevocablemente:
-            1. **Modelo Financiero:** Retención del 10% por parte de la plataforma tecnológica y liquidación del 90% neta al restaurante.
-            2. **Responsabilidad Sanitaria e Inocuidad:** El restaurante aliado asume plena, exclusiva e ineludible responsabilidad civil, penal y sanitaria sobre la manipulación, preparación, calidad bromatológica, gramajes, frescura e inocuidad de los alimentos entregados a los pacientes y deportistas, liberando de toda responsabilidad a **COMPANIA HCHFA CA**.
-            3. **Permisología:** El aliado garantiza poseer permisos sanitarios vigentes y cumplir con la Ley de Alimentación y normativas bromatológicas de la República Bolivariana de Venezuela.
-            """
-        )
+        acepto_contrato = st.checkbox("✅ Acepta términos de comisión (10/90) y responsabilidad sanitaria e inocuidad.")
+        btn_reg = st.form_submit_button("📝 Registrar Aliado")
         
-        acepto_contrato = st.checkbox("✅ El establecimiento declara haber leído, entendido y aceptado formalmente las condiciones de negocio, comisiones y la responsabilidad legal en materia sanitaria y de inocuidad de los alimentos.")
-        
-        btn_registrar_aliado = st.form_submit_button("📝 Registrar y Afiliar Restaurante Aliado")
-        
-        if btn_registrar_aliado:
-            if not nombre_comercial or not rif_restaurante or not representante_legal or not telefono_contacto:
-                st.error("Por favor complete todos los campos obligatorios del establecimiento.")
-            elif not acepto_contrato:
-                st.error("Debe marcar la casilla de aceptación del Contrato de Adhesión y Responsabilidad Sanitaria para proceder.")
+        if btn_reg:
+            if not nombre_comercial or not rif_restaurante or not acepto_contrato:
+                st.error("Complete los campos obligatorios y acepte el contrato.")
             else:
                 try:
                     conn = sqlite3.connect('nutrisalud_database.db')
                     c = conn.cursor()
-                    fecha_afiliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    
-                    c.execute('''
-                        INSERT INTO restaurantes_afiliados (fecha_registro, nombre_comercial, rif, representante, estado, telefono, email, acepto_terminos)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (fecha_afiliacion, nombre_comercial, rif_restaurante, representante_legal, estado_operacion, telefono_contacto, email_contacto, "SÍ - ACEPTADO"))
-                    
+                    c.execute("INSERT INTO restaurantes_afiliados (fecha_registro, nombre_comercial, rif, representante, estado, telefono, email, acepto_terminos) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                              (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), nombre_comercial, rif_restaurante, representante_legal, estado_operacion, telefono_contacto, email_contacto, "SÍ - ACEPTADO"))
                     conn.commit()
                     conn.close()
-                    
-                    st.success(f"🎉 ¡Restaurante **{nombre_comercial}** afiliado exitosamente para el estado **{estado_operacion}** bajo el Contrato Marco B2B!")
-                    st.balloons()
+                    st.success(f"🎉 Restaurante {nombre_comercial} afiliado con éxito.")
                 except sqlite3.IntegrityError:
-                    st.error("❌ Error: Ya existe un restaurante registrado con este mismo RIF en el sistema.")
+                    st.error("❌ Ya existe un restaurante con este RIF.")
 
-    st.markdown("---")
-    st.subheader("📋 Listado de Restaurantes Aliados Activos")
+    st.subheader("Listado de Aliados")
     conn = sqlite3.connect('nutrisalud_database.db')
-    df_aliados = pd.read_sql_query("SELECT * FROM restaurantes_afiliados", conn)
+    st.dataframe(pd.read_sql_query("SELECT * FROM restaurantes_afiliados", conn), use_container_width=True)
     conn.close()
-    
-    if not df_aliados.empty:
-        st.dataframe(df_aliados, use_container_width=True)
-    else:
-        st.info("No hay restaurantes registrados mediante el módulo digital aún (utilizando los aliados base por defecto).")
 
 # ==========================================
-# 8. MÓDULO PRIVADO: CONTRATO MARCO DE ADHESIÓN
+# 9. MÓDULO PRIVADO: CONTRATO MARCO
 # ==========================================
 elif opcion == "📄 Contrato Marco de Adhesión" and es_admin:
-    st.header("📄 Contrato Marco de Adhesión, Comisiones y Responsabilidad Sanitaria B2B")
+    st.header("📄 Contrato Marco de Adhesión y Comisiones (90/10)")
     st.markdown(
         f"""
-        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS RESTAURANTES ALIADOS
-        **COMPANIA HCHFA CA (RIF: J-404509216)**
-        
-        ---
-        
-        **1. OBJETO DEL ACUERDO:**  
-        El presente contrato regula los términos y condiciones de la vinculación comercial entre **COMPANIA HCHFA CA** y las cocinas aliadas (*Dark Kitchens* / Restaurantes) que procesarán y despacharán menús clínicos, terapéuticos y de alto rendimiento para atletas a través de la plataforma tecnológica **NutriSalud Digital**.
-
-        **2. MODELO FINANCIERO Y COMISIONES (90/10):**  
-        * **Centralización de Pagos:** Todos los pagos realizados por los clientes finales son recaudados centralmente por **COMPANIA HCHFA CA**.
-        * **Comisión de Plataforma (10%):** La empresa retiene un diez por ciento (10%) del valor total de cada menú procesado por concepto de pasarela tecnológica, marketing nacional y articulación de demanda.
-        * **Liquidación Neta al Aliado (90%):** La empresa transfiere el noventa por ciento (90%) restante al restaurante aliado conforme a los cierres y liquidaciones acordadas.
-
-        **3. RESPONSABILIDAD SANITARIA, BROMATOLOGÍA E INOCUIDAD:**  
-        * El restaurante aliado asume **total e ineludible responsabilidad legal, civil, administrativa y penal** sobre la manipulación, salubridad, calidad bromatológica, frescura, gramajes y trazabilidad de los alimentos preparados y entregados.
-        * El aliado garantiza contar con licencias sanitarias vigentes y cumplir de manera estricta con las leyes alimentarias y de sanidad de la República Bolivariana de Venezuela, eximiendo y blindando por completo a **COMPANIA HCHFA CA** ante cualquier eventualidad bromatológica o sanitaria.
-
-        **4. CONFIDENCIALIDAD:**  
-        * Queda estrictamente prohibido el uso comercial externo o divulgación de la base de datos de pacientes, atletas, recetas o historiales gestionados a través de la plataforma.
+        ### ACUERDO COMERCIAL Y SANITARIO B2B
+        **{DATOS_ADMIN['empresa']} (RIF: {DATOS_ADMIN['rif']})**
+        * **Comisión Plataforma:** 10%
+        * **Liquidación Aliado:** 90%
+        * **Inocuidad y Sanidad:** Responsabilidad exclusiva del restaurante aliado.
         """
     )
