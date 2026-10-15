@@ -30,6 +30,21 @@ def init_db():
         )
     ''')
     
+    # Tabla de Restaurantes Aliados (Afiliados formalmente)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS restaurantes_afiliados (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            fecha_registro TEXT,
+            nombre_comercial TEXT NOT NULL,
+            rif TEXT UNIQUE NOT NULL,
+            representante TEXT NOT NULL,
+            estado TEXT NOT NULL,
+            telefono TEXT NOT NULL,
+            email TEXT NOT NULL,
+            acepto_terminos TEXT NOT NULL
+        )
+    ''')
+    
     # Tabla de Pedidos
     c.execute('''
         CREATE TABLE IF NOT EXISTS pedidos (
@@ -83,13 +98,24 @@ ESTADOS_VENEZUELA = [
     "Portuguesa", "Sucre", "Táchira", "Trujillo", "La Guaira", "Yaracuy", "Zulia"
 ]
 
-RESTAURANTES_ALIADOS = {
-    "Distrito Capital": {"nombre": "NutriKitchen Chacao", "telefono": "04120582064"},
-    "Carabobo": {"nombre": "Vida Sana El Viñedo", "telefono": "04124445566"},
-    "Zulia": {"nombre": "Sabor Clínico Maracaibo", "telefono": "04146667788"},
-    "Lara": {"nombre": "Cocina Terapéutica Barquisimeto", "telefono": "04169990011"},
-    "Anzoátegui": {"nombre": "NutriSalud Puerto La Cruz", "telefono": "04248889900"}
-}
+# Función para cargar aliados desde la BD o usar los base por defecto
+def obtener_restaurantes_aliados():
+    conn = sqlite3.connect('nutrisalud_database.db')
+    df = pd.read_sql_query("SELECT estado, nombre_comercial, telefono FROM restaurantes_afiliados", conn)
+    conn.close()
+    
+    aliados = {
+        "Distrito Capital": {"nombre": "NutriKitchen Chacao", "telefono": "04120582064"},
+        "Carabobo": {"nombre": "Vida Sana El Viñedo", "telefono": "04124445566"},
+        "Zulia": {"nombre": "Sabor Clínico Maracaibo", "telefono": "04146667788"},
+        "Lara": {"nombre": "Cocina Terapéutica Barquisimeto", "telefono": "04169990011"},
+        "Anzoátegui": {"nombre": "NutriSalud Puerto La Cruz", "telefono": "04248889900"}
+    }
+    
+    for _, row in df.iterrows():
+        aliados[row['estado']] = {"nombre": row['nombre_comercial'], "telefono": row['telefono']}
+    
+    return aliados
 
 MENU_BASE = {
     "Diabetes Tipo 2": [
@@ -143,7 +169,12 @@ if modo_usuario == "Administración Central":
 if es_admin:
     opcion = st.sidebar.radio(
         "Módulos de Gestión", 
-        ["📋 Pedidos en Cola & Liquidaciones", "👤 Registro de Clientes", "📄 Contrato y Acuerdos Comerciales"]
+        [
+            "📋 Pedidos en Cola & Liquidaciones", 
+            "👤 Registro de Clientes", 
+            "🤝 Módulo de Afiliación y Contratos B2B", 
+            "📄 Contrato Marco de Adhesión"
+        ]
     )
 else:
     opcion = "🛒 Realizar Pedido"
@@ -180,7 +211,9 @@ if opcion == "🛒 Realizar Pedido":
         nombre_cliente = st.text_input("Nombre Completo:")
         cedula_cliente = st.text_input("Cédula o RIF:")
         telefono_cliente = st.text_input("Teléfono de Contacto (Ej: 04121234567):", help="Ingrese su número móvil para recibir la confirmación por WhatsApp.")
-        estado_destino = st.selectbox("Estado de Venezuela:", ESTADOS_VENEZUELA)
+        
+        RESTAURANTES_ALIADOS = obtener_restaurantes_aliados()
+        estado_destino = st.selectbox("Estado de Venezuela:", list(RESTAURANTES_ALIADOS.keys()))
         
         tipo_entrega = st.radio("Modalidad de Entrega:", ["Delivery a Domicilio", "Pick-Up / Sin Delivery (Retiro en Local)"])
         direccion = st.text_input("Dirección de Entrega / Notas:", "Retiro en Local" if "Sin Delivery" in tipo_entrega else "")
@@ -205,6 +238,7 @@ if opcion == "🛒 Realizar Pedido":
         if not nombre_cliente or not cedula_cliente or not telefono_cliente or not ref_pago:
             st.error("Por favor complete todos los campos obligatorios, incluyendo su teléfono de contacto y referencia.")
         else:
+            RESTAURANTES_ALIADOS = obtener_restaurantes_aliados()
             aliado = RESTAURANTES_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
             
             monto_usd = plato_obj['precio_usd']
@@ -231,7 +265,6 @@ if opcion == "🛒 Realizar Pedido":
             st.balloons()
             st.success("✅ ¡Pedido registrado exitosamente en el sistema central!")
             
-            # Mensaje para el Restaurante Aliado
             mensaje_aliado = (
                 f"*[NUEVO PEDIDO NUTRISALUD DIGITAL]*\n\n"
                 f"👤 *Cliente:* {nombre_cliente} ({cedula_cliente})\n"
@@ -247,7 +280,6 @@ if opcion == "🛒 Realizar Pedido":
                 f"💼 *Liquidación Neta Aliado (90%):* ${pago_neto_aliado:.2f} USD"
             )
             
-            # Mensaje de Agradecimiento y Confirmación para el Cliente
             mensaje_cliente = (
                 f"¡Hola *{nombre_cliente}*! 🥗\n\n"
                 f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para cuidar su salud y garantizarle una vida más saludable y equilibrada.\n\n"
@@ -262,7 +294,6 @@ if opcion == "🛒 Realizar Pedido":
             url_wsp_aliado = f"https://wa.me/58{aliado['telefono'][1:]}?text={urllib.parse.quote(mensaje_aliado)}"
             url_wsp_admin = f"https://wa.me/58{DATOS_ADMIN['telefono'][1:]}?text={urllib.parse.quote(mensaje_aliado)}"
             
-            # Formatear teléfono del cliente para WhatsApp (remover espacios o ceros iniciales si los tuviera)
             tel_cliente_limpio = telefono_cliente.strip()
             if tel_cliente_limpio.startswith("0"):
                 tel_cliente_limpio = tel_cliente_limpio[1:]
@@ -330,29 +361,101 @@ elif opcion == "👤 Registro de Clientes" and es_admin:
         st.info("Aún no hay clientes registrados en la base de datos.")
 
 # ==========================================
-# 7. MÓDULO PRIVADO: CONTRATO Y ACUERDOS
+# 7. MÓDULO PRIVADO: AFILIACIÓN Y CONTRATOS B2B
 # ==========================================
-elif opcion == "📄 Contrato y Acuerdos Comerciales" and es_admin:
-    st.header("📄 Contrato Marco de Confidencialidad, Garantía de Pagos y Comisiones")
+elif opcion == "🤝 Módulo de Afiliación y Contratos B2B" and es_admin:
+    st.header("🤝 Módulo de Afiliación Digital de Restaurantes y Dark Kitchens")
+    st.write("Registro oficial de nuevos locales aliados bajo el Contrato Marco de Adhesión, Inocuidad Alimentaria y Comisiones (90/10).")
+    
+    with st.form("form_afiliacion"):
+        st.subheader("Datos del Establecimiento Comercial / Aliado")
+        col_f1, col_f2 = st.columns(2)
+        
+        with col_f1:
+            nombre_comercial = st.text_input("Nombre Comercial del Restaurante / Dark Kitchen:")
+            rif_restaurante = st.text_input("RIF del Establecimiento (Ej: J-12345678-9):")
+            representante_legal = st.text_input("Nombre del Representante Legal:")
+            
+        with col_f2:
+            estado_operacion = st.selectbox("Estado de Operación (Cobertura):", ESTADOS_VENEZUELA)
+            telefono_contacto = st.text_input("Teléfono Móvil / WhatsApp del Local:")
+            email_contacto = st.text_input("Correo Electrónico Corporativo:")
+            
+        st.markdown("---")
+        st.subheader("📜 Cláusula de Adhesión, Sanidad y Responsabilidad Legal")
+        st.info(
+            """
+            Al registrar y afiliar este establecimiento, el Representante Legal declara conocer y aceptar irrevocablemente:
+            1. **Modelo Financiero:** Retención del 10% por parte de la plataforma tecnológica y liquidación del 90% neta al restaurante.
+            2. **Responsabilidad Sanitaria e Inocuidad:** El restaurante aliado asume plena, exclusiva e ineludible responsabilidad civil, penal y sanitaria sobre la manipulación, preparación, calidad bromatológica, gramajes, frescura e inocuidad de los alimentos entregados a los pacientes, liberando de toda responsabilidad a **COMPANIA HCHFA CA**.
+            3. **Permisología:** El aliado garantiza poseer permisos sanitarios vigentes y cumplir con la Ley de Alimentación y normativas bromatológicas de la República Bolivariana de Venezuela.
+            """
+        )
+        
+        acepto_contrato = st.checkbox("✅ El establecimiento declara haber leído, entendido y aceptado formalmente las condiciones de negocio, comisiones y la responsabilidad legal en materia sanitaria y de inocuidad de los alimentos.")
+        
+        btn_registrar_aliado = st.form_submit_button("📝 Registrar y Afiliar Restaurante Aliado")
+        
+        if btn_registrar_aliado:
+            if not nombre_comercial or not rif_restaurante or not representante_legal or not telefono_contacto:
+                st.error("Por favor complete todos los campos obligatorios del establecimiento.")
+            elif not acepto_contrato:
+                st.error("Debe marcar la casilla de aceptación del Contrato de Adhesión y Responsabilidad Sanitaria para proceder.")
+            else:
+                try:
+                    conn = sqlite3.connect('nutrisalud_database.db')
+                    c = conn.cursor()
+                    fecha_afiliacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    c.execute('''
+                        INSERT INTO restaurantes_afiliados (fecha_registro, nombre_comercial, rif, representante, estado, telefono, email, acepto_terminos)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (fecha_afiliacion, nombre_comercial, rif_restaurante, representante_legal, estado_operacion, telefono_contacto, email_contacto, "SÍ - ACEPTADO"))
+                    
+                    conn.commit()
+                    conn.close()
+                    
+                    st.success(f"🎉 ¡Restaurante **{nombre_comercial}** afiliado exitosamente para el estado **{estado_operacion}** bajo el Contrato Marco B2B!")
+                    st.balloons()
+                except sqlite3.IntegrityError:
+                    st.error("❌ Error: Ya existe un restaurante registrado con este mismo RIF en el sistema.")
+
+    st.markdown("---")
+    st.subheader("📋 Listado de Restaurantes Aliados Activos")
+    conn = sqlite3.connect('nutrisalud_database.db')
+    df_aliados = pd.read_sql_query("SELECT * FROM restaurantes_afiliados", conn)
+    conn.close()
+    
+    if not df_aliados.empty:
+        st.dataframe(df_aliados, use_container_width=True)
+    else:
+        st.info("No hay restaurantes registrados mediante el módulo digital aún (utilizando los aliados base por defecto).")
+
+# ==========================================
+# 8. MÓDULO PRIVADO: CONTRATO MARCO DE ADHESIÓN
+# ==========================================
+elif opcion == "📄 Contrato Marco de Adhesión" and es_admin:
+    st.header("📄 Contrato Marco de Adhesión, Comisiones y Responsabilidad Sanitaria B2B")
     st.markdown(
-        """
-        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS RESTAURANTES ALIADOS
+        f"""
+        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS HEALTHERS / RESTAURANTES ALIADOS
         **COMPANIA HCHFA CA (RIF: J-404509216)**
         
         ---
         
         **1. OBJETO DEL ACUERDO:**  
-        El presente documento establece los términos y condiciones bajo los cuales la red de cocinas aliadas (Dark Kitchens / Restaurantes) procesará los menús terapéuticos y clínicos solicitados a través de la plataforma tecnológica **NutriSalud Digital**, garantizando el cumplimiento estricto de gramajes, patologías y normativas bromatológicas.
+        El presente contrato regula los términos y condiciones de la vinculación comercial entre **COMPANIA HCHFA CA** y las cocinas aliadas (*Dark Kitchens* / Restaurantes) que procesarán y despacharán menús clínicos y terapéuticos a través de la plataforma tecnológica **NutriSalud Digital**.
 
-        **2. MODELO FINANCIERO Y COMISIONES (10%):**  
-        * **Cobro Centralizado:** Todo pago efectuado por el paciente final ingresa de forma centralizada a la cuenta de **COMPANIA HCHFA CA**.
-        * **Comisión de la Plataforma:** La plataforma retiene un **10%** del valor total del plato por concepto de articulación de demanda, marketing nacional, pasarela tecnológica y soporte logístico.
-        * **Liquidación al Aliado (90%):** La empresa transferirá el **90%** restante al restaurante aliado correspondiente, según los acuerdos de liquidación acordados, respaldados mediante comprobantes de pago verificados.
+        **2. MODELO FINANCIERO Y COMISIONES (90/10):**  
+        * **Centralización de Pagos:** Todos los pagos realizados por los clientes finales son recaudados centralmente por **COMPANIA HCHFA CA**.
+        * **Comisión de Plataforma (10%):** La empresa retiene un diez por ciento (10%) del valor total de cada menú procesado por concepto de pasarela tecnológica, marketing nacional y articulación de demanda.
+        * **Liquidación Neta al Aliado (90%):** La empresa transfiere el noventa por ciento (90%) restante al restaurante aliado conforme a los cierres y liquidaciones acordadas.
 
-        **3. CONFIDENCIALIDAD Y PROTECCIÓN DE DATOS:**  
-        * Las partes se comprometen a mantener estricta confidencialidad sobre la base de datos de pacientes, historiales clínicos, recetas médicas y volúmenes de transacciones gestionados a través del sistema. Queda prohibida la divulgación o uso comercial externo de dicha información.
+        **3. RESPONSABILIDAD SANITARIA, BROMATOLOGÍA E INOCUIDAD:**  
+        * El restaurante aliado asume **total e ineludible responsabilidad legal, civil, administrativa y penal** sobre la manipulación, salubridad, calidad bromatológica, frescura, gramajes y trazabilidad de los alimentos preparados y entregados.
+        * El aliado garantiza contar con licencias sanitarias vigentes y cumplir de manera estricta con las leyes alimentarias y de sanidad de la República Bolivariana de Venezuela, eximiendo y blindando por completo a **COMPANIA HCHFA CA** ante cualquier eventualidad bromatológica o sanitaria.
 
-        **4. GARANTÍA DE CALIDAD Y TIEMPOS:**  
-        * El restaurante aliado garantiza la elaboración de los menús conforme a las especificaciones clínicas (Diabetes, Renal, Hipertensión, Celiaquía) y respetando los tiempos de espera seleccionados por el cliente o la modalidad de entrega.
+        **4. CONFIDENCIALIDAD:**  
+        * Queda estrictamente prohibido el uso comercial externo o divulgación de la base de datos de pacientes, recetas o historiales clínicos gestionados a través de la plataforma.
         """
     )
