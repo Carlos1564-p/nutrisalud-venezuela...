@@ -7,11 +7,25 @@ from datetime import datetime
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL Y BASE DE DATOS
 # ==========================================
+import streamlit as st
+
+# Configuración de la página
 st.set_page_config(
     page_title="NutriSalud Digital", 
     page_icon="🥗", 
     layout="wide"
 )
+
+# --- COLOCAR EL LOGOTIPO AQUÍ ---
+# Puedes colocarlo en la barra lateral (sidebar) o en la página principal:
+st.sidebar.image("Logo Agrodigitalvenezueladeinitivo.png", use_container_width=True)
+
+# O en el encabezado principal de la página:
+# st.image("Logo Agrodigitalvenezueladeinitivo.png", width=300)
+
+st.title("🥗 NutriSalud Digital")
+st.caption("COMPANIA HCHFA CA | RIF: J-404509216")
+st.markdown("---")
 
 # Inicializar Base de Datos SQLite
 def init_db():
