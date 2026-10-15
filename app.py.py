@@ -7,25 +7,11 @@ from datetime import datetime
 # ==========================================
 # 1. CONFIGURACIÓN INICIAL Y BASE DE DATOS
 # ==========================================
-import streamlit as st
-
-# Configuración de la página
 st.set_page_config(
     page_title="NutriSalud Digital", 
     page_icon="🥗", 
     layout="wide"
 )
-
-# --- COLOCAR EL LOGOTIPO AQUÍ ---
-# Puedes colocarlo en la barra lateral (sidebar) o en la página principal:
-st.sidebar.image("Logo Agrodigitalvenezueladeinitivo.png", use_container_width=True)
-
-# O en el encabezado principal de la página:
-# st.image("Logo Agrodigitalvenezueladeinitivo.png", width=300)
-
-st.title("🥗 NutriSalud Digital")
-st.caption("COMPANIA HCHFA CA | RIF: J-404509216")
-st.markdown("---")
 
 # Inicializar Base de Datos SQLite
 def init_db():
@@ -114,8 +100,9 @@ MENU_BASE = {
 }
 
 # ==========================================
-# 3. ENCABEZADO Y TASA DE CAMBIO DINÁMICA
+# 3. ENCABEZADO, LOGOTIPO Y TASA DE CAMBIO
 # ==========================================
+st.sidebar.image("Logo Agrodigitalvenezueladeinitivo.png", use_container_width=True)
 st.sidebar.title("⚙️ Panel de Control")
 
 tasa_dolar = st.sidebar.number_input(
@@ -164,8 +151,8 @@ if opcion == "🛒 Realizar Pedido":
         telefono_cliente = st.text_input("Teléfono de Contacto (WhatsApp):")
         estado_destino = st.selectbox("Estado de Venezuela:", ESTADOS_VENEZUELA)
         
-        tipo_entrega = st.radio("Modalidad de Entrega:", ["Delivery a Domicilio", "Pick-Up / Retiro en Restaurante"])
-        direccion = st.text_input("Dirección de Entrega / Notas:", "Retiro en Local" if tipo_entrega == "Pick-Up / Retiro en Restaurante" else "")
+        tipo_entrega = st.radio("Modalidad de Entrega:", ["Delivery a Domicilio", "Pick-Up / Sin Delivery (Retiro en Local)"])
+        direccion = st.text_input("Dirección de Entrega / Notas:", "Retiro en Local" if "Sin Delivery" in tipo_entrega else "")
         tiempo_espera = st.select_slider(
             "Tiempo Máximo de Espera Disponible:",
             options=["30-45 min", "45-60 min", "1-2 Horas", "Programado para la Cena/Almuerzo"]
