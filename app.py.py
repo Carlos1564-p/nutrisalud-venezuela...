@@ -41,6 +41,8 @@ def init_db():
             tiempo_espera TEXT,
             monto_usd REAL,
             monto_ves REAL,
+            comision_plataforma_usd REAL,
+            pago_neto_aliado_usd REAL,
             ref_pago TEXT,
             estatus TEXT
         )
@@ -58,7 +60,8 @@ DATOS_ADMIN = {
     "rif": "J-404509216",
     "banco": "Banco de Venezuela (0102)",
     "telefono": "04120582064",
-    "email": "alimentoshchf4@gmail.com"
+    "email": "alimentoshchf4@gmail.com",
+    "password_admin": "Admin2026*"  # Contraseña secreta para ver módulos administrativos
 }
 
 ESTADOS_VENEZUELA = [
@@ -100,33 +103,53 @@ MENU_BASE = {
 }
 
 # ==========================================
-# 3. ENCABEZADO, LOGOTIPO Y TASA DE CAMBIO
+# 3. CONTROL DE ACCESO (LOGIN DE ADMINISTRADOR)
 # ==========================================
-st.sidebar.image("logonutrisalud.png", use_container_width=True)
-st.sidebar.title("⚙️ Panel de Control")
+st.sidebar.image("Logo Agrodigitalvenezueladeinitivo.png", use_container_width=True)
+st.sidebar.title("🔐 Panel de Control")
 
+# Control de Tasa de Cambio (Visible o editable con clave o por defecto)
 tasa_dolar = st.sidebar.number_input(
     "Tasa de Cambio del Día (VES/USD):", 
     min_value=1.0, 
     value=36.50, 
-    step=0.50,
-    help="Modifique este valor para recalcular el catálogo completo en Bolívares."
+    step=0.50
 )
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Acceso a Módulos")
+modo_usuario = st.sidebar.radio("Seleccione Perfil:", ["Público (Clientes)", "Administración Central"])
+
+es_admin = False
+if modo_usuario == "Administración Central":
+    pwd_ingresada = st.sidebar.text_input("Ingrese Clave de Administrador:", type="password")
+    if pwd_ingresada == DATOS_ADMIN["password_admin"]:
+        es_admin = True
+        st.sidebar.success("✅ Acceso de Administrador Concedido")
+    elif pwd_ingresada != "":
+        st.sidebar.error("❌ Contraseña incorrecta")
+
+# Navegación condicional según rol
+if es_admin:
+    opcion = st.sidebar.radio(
+        "Módulos de Gestión", 
+        ["📋 Pedidos en Cola & Liquidaciones", "👤 Registro de Clientes", "📄 Contrato y Acuerdos Comerciales"]
+    )
+else:
+    opcion = "🛒 Realizar Pedido"
+    if modo_usuario == "Administración Central":
+        st.sidebar.warning("⚠️ Ingrese la contraseña correcta para ver los módulos administrativos.")
 
 st.title("🥗 NutriSalud Digital")
 st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']}")
 st.markdown("---")
 
-opcion = st.sidebar.radio(
-    "Navegación", 
-    ["🛒 Realizar Pedido", "📋 Pedidos en Cola", "👤 Registro de Clientes", "🏪 Directorio Aliados"]
-)
-
 # ==========================================
-# 4. MÓDULO: REALIZAR PEDIDO
+# 4. MÓDULO PÚBLICO: REALIZAR PEDIDO
 # ==========================================
 if opcion == "🛒 Realizar Pedido":
     st.header("🛒 Módulo de Pedidos Terapéuticos")
+    st.info("💡 Su pago es procesado de forma centralizada y segura a través de la cuenta matriz de la empresa. La plataforma articula de forma automatizada la elaboración con la cocina aliada correspondiente.")
     
     col1, col2 = st.columns(2)
     
@@ -159,22 +182,27 @@ if opcion == "🛒 Realizar Pedido":
         )
 
     st.markdown("---")
-    st.subheader("3. Pago Móvil BDV y Confirmación")
+    st.subheader("3. Pago Móvil BDV Centralizado")
     
-    with st.expander("💳 Ver Datos Bancarios Oficiales BDV"):
+    with st.expander("💳 Ver Datos Bancarios Oficiales BDV para el Pago Centralizado"):
         st.write(f"**Empresa:** {DATOS_ADMIN['empresa']}")
         st.write(f"**RIF:** {DATOS_ADMIN['rif']}")
         st.write(f"**Banco:** {DATOS_ADMIN['banco']}")
         st.write(f"**Teléfono BDV:** {DATOS_ADMIN['telefono']}")
-        st.info(f"Monto exacto a transferir: **{precio_ves:,.2f} VES**")
+        st.info(f"Monto exacto a transferir a la cuenta central: **{precio_ves:,.2f} VES**")
 
     ref_pago = st.text_input("Número de Referencia Pagomóvil BDV:")
 
-    if st.button("🚀 Procesar y Generar Notificaciones de WhatsApp"):
+    if st.button("🚀 Procesar Pedido y Enviar a WhatsApp"):
         if not nombre_cliente or not cedula_cliente or not ref_pago:
             st.error("Por favor complete los datos obligatorios del cliente y el número de referencia.")
         else:
             aliado = RESTAURANTES_ALIADOS.get(estado_destino, {"nombre": "Cocina Central NutriSalud", "telefono": DATOS_ADMIN['telefono']})
+            
+            # Cálculos financieros del negocio (10% comisión plataforma, 90% pago neto al restaurante)
+            monto_usd = plato_obj['precio_usd']
+            comision_plataforma = monto_usd * 0.10
+            pago_neto_aliado = monto_usd * 0.90
             
             conn = sqlite3.connect('nutrisalud_database.db')
             c = conn.cursor()
@@ -186,15 +214,15 @@ if opcion == "🛒 Realizar Pedido":
             
             fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             c.execute('''
-                INSERT INTO pedidos (fecha, cliente_nombre, patologia, plato, restaurante_aliado, tipo_entrega, tiempo_espera, monto_usd, monto_ves, ref_pago, estatus)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (fecha_actual, nombre_cliente, patologia, plato_obj['nombre'], aliado['nombre'], tipo_entrega, tiempo_espera, plato_obj['precio_usd'], precio_ves, ref_pago, "En Cola"))
+                INSERT INTO pedidos (fecha, cliente_nombre, patologia, plato, restaurante_aliado, tipo_entrega, tiempo_espera, monto_usd, monto_ves, comision_plataforma_usd, pago_neto_aliado_usd, ref_pago, estatus)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (fecha_actual, nombre_cliente, patologia, plato_obj['nombre'], aliado['nombre'], tipo_entrega, tiempo_espera, monto_usd, precio_ves, comision_plataforma, pago_neto_aliado, ref_pago, "En Cola"))
             
             conn.commit()
             conn.close()
             
             st.balloons()
-            st.success("✅ Pedido registrado exitosamente en el sistema.")
+            st.success("✅ Pedido registrado exitosamente en el sistema central.")
             
             mensaje_pedido = (
                 f"*[NUEVO PEDIDO NUTRISALUD DIGITAL]*\n\n"
@@ -205,9 +233,10 @@ if opcion == "🛒 Realizar Pedido":
                 f"🛵 *Modo:* {tipo_entrega}\n"
                 f"🏠 *Dirección:* {direccion}\n"
                 f"⏳ *Tiempo Espera:* {tiempo_espera}\n"
-                f"💵 *Monto:* ${plato_obj['precio_usd']:.2f} USD ({precio_ves:,.2f} VES)\n"
-                f"💳 *Ref BDV:* {ref_pago}\n"
-                f"🍳 *Cocina Asignada:* {aliado['nombre']}"
+                f"💵 *Monto Total:* ${monto_usd:.2f} USD ({precio_ves:,.2f} VES)\n"
+                f"💳 *Ref BDV Central:* {ref_pago}\n"
+                f"🍳 *Cocina Asignada:* {aliado['nombre']}\n"
+                f"💼 *Liquidación a transferir al Aliado:* ${pago_neto_aliado:.2f} USD (Neto 90%)"
             )
             
             url_wsp_aliado = f"https://wa.me/58{aliado['telefono'][1:]}?text={urllib.parse.quote(mensaje_pedido)}"
@@ -215,15 +244,16 @@ if opcion == "🛒 Realizar Pedido":
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
-                st.markdown(f"[📲 **Notificar al Restaurante Aliado ({aliado['nombre']})**]({url_wsp_aliado})")
+                st.markdown(f"[📲 **Notificar a la Cocina Aliada ({aliado['nombre']})**]({url_wsp_aliado})")
             with col_btn2:
                 st.markdown(f"[🏢 **Enviar Copia de Auditoría a Administración**]({url_wsp_admin})")
 
 # ==========================================
-# 5. MÓDULO: PEDIDOS EN COLA
+# 5. MÓDULO PRIVADO: PEDIDOS EN COLA & LIQUIDACIONES
 # ==========================================
-elif opcion == "📋 Pedidos en Cola":
-    st.header("📋 Monitoreo de Pedidos en Cola y Estatus")
+elif opcion == "📋 Pedidos en Cola & Liquidaciones" and es_admin:
+    st.header("📋 Monitoreo de Pedidos, Estatus y Liquidación a Aliados")
+    st.write("Vista exclusiva para Administración. Control de pagos netos a restaurantes (90%) y retención de comisión (10%).")
     
     conn = sqlite3.connect('nutrisalud_database.db')
     df_pedidos = pd.read_sql_query("SELECT * FROM pedidos ORDER BY id DESC", conn)
@@ -232,12 +262,12 @@ elif opcion == "📋 Pedidos en Cola":
     if not df_pedidos.empty:
         st.dataframe(df_pedidos, use_container_width=True)
         
-        st.subheader("Gestión de Estatus de Pedidos")
+        st.subheader("Gestión de Estatus y Liquidación")
         col_id, col_estatus, col_btn = st.columns(3)
         with col_id:
             pedido_id = st.number_input("ID del Pedido:", min_value=int(df_pedidos['id'].min()), max_value=int(df_pedidos['id'].max()), step=1)
         with col_estatus:
-            nuevo_estatus = st.selectbox("Cambiar Estatus:", ["En Cola", "En Preparación", "En Camino", "Entregado", "Cancelado"])
+            nuevo_estatus = st.selectbox("Cambiar Estatus:", ["En Cola", "En Preparación", "En Camino", "Entregado & Liquidado", "Cancelado"])
         with col_btn:
             st.write("")
             st.write("")
@@ -253,9 +283,9 @@ elif opcion == "📋 Pedidos en Cola":
         st.info("No hay pedidos registrados en la base de datos.")
 
 # ==========================================
-# 6. MÓDULO: REGISTRO DE CLIENTES
+# 6. MÓDULO PRIVADO: REGISTRO DE CLIENTES
 # ==========================================
-elif opcion == "👤 Registro de Clientes":
+elif opcion == "👤 Registro de Clientes" and es_admin:
     st.header("👤 Base de Datos Activa de Clientes Registrados")
     
     conn = sqlite3.connect('nutrisalud_database.db')
@@ -269,9 +299,29 @@ elif opcion == "👤 Registro de Clientes":
         st.info("Aún no hay clientes registrados en la base de datos.")
 
 # ==========================================
-# 7. MÓDULO: DIRECTORIO NACIONAL
+# 7. MÓDULO PRIVADO: CONTRATO Y ACUERDOS
 # ==========================================
-elif opcion == "🏪 Directorio Aliados":
-    st.header("🏪 Cobertura y Red de Dark Kitchens Certificadas")
-    for estado, data in RESTAURANTES_ALIADOS.items():
-        st.write(f"• **{data['nombre']}** | Estado: {estado} | Contacto WhatsApp: `{data['telefono']}`")
+elif opcion == "📄 Contrato y Acuerdos Comerciales" and es_admin:
+    st.header("📄 Contrato Marco de Confidencialidad, Garantía de Pagos y Comisiones")
+    st.markdown(
+        f"""
+        ### ACUERDO DE ALIANZA COMERCIAL Y PRESTACIÓN DE SERVICIOS HEALTHERS / RESTAURANTES ALIADOS
+        **COMPANIA HCHFA CA (RIF: J-404509216)**
+        
+        ---
+        
+        **1. OBJETO DEL ACUERDO:**  
+        El presente documento establece los términos y condiciones bajo los cuales la red de cocinas aliadas (Dark Kitchens / Restaurantes) procesará los menús terapéuticos y clínicos solicitados a través de la plataforma tecnológica **NutriSalud Digital**, garantizando el cumplimiento estricto de gramajes, patologías y normativas bromatológicas.
+
+        **2. MODELO FINANCIERO Y COMISIONES (10%):**  
+        * **Cobro Centralizado:** Todo pago efectuado por el paciente final ingresa de forma centralizada a la cuenta de **COMPANIA HCHFA CA**.
+        * **Comisión de la Plataforma:** La plataforma retiene un **10%** del valor total del plato por concepto de articulación de demanda, marketing nacional, pasarela tecnológica y soporte logístico.
+        * **Liquidación al Aliado (90%):** La empresa transferirá el **90%** restante al restaurante aliado correspondiente, según los acuerdos de liquidación acordados (diarios o semanales), respaldados mediante comprobantes de pago verificados.
+
+        **3. CONFIDENCIALIDAD Y PROTECCIÓN DE DATOS:**  
+        * Las partes se comprometen a mantener estricta confidencialidad sobre la base de datos de pacientes, historiales clínicos, recetas médicas y volúmenes de transacciones gestionados a través del sistema. Queda prohibida la divulgación o uso comercial externo de dicha información.
+
+        **4. GARANTÍA DE CALIDAD Y TIEMPOS:**  
+        * El restaurante aliado garantiza la elaboración de los menús conforme a las especificaciones clínicas (Diabetes, Renal, Hipertensión, Celiaquía) y respetando los tiempos de espera seleccionados por el cliente o la modalidad de entrega (Con o sin delivery).
+        """
+    )
