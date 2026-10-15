@@ -117,7 +117,14 @@ def obtener_restaurantes_aliados():
     
     return aliados
 
+# Repertorio Ampliado con Módulo Fitness y Deportistas
 MENU_BASE = {
+    "Fitness y Deportistas / Alto Rendimiento": [
+        {"nombre": "Power Bowl: Pechuga a la Plancha, Arroz Integral y Brócoli", "precio_usd": 7.50},
+        {"nombre": "Filet de Res Lean con Puré de Batata y Espinaca", "precio_usd": 9.00},
+        {"nombre": "Tortilla Proteica de Claras, Avena y Frutos Rojos", "precio_usd": 5.50},
+        {"nombre": "Salmón Grillado con Quínoa y Espárragos", "precio_usd": 10.00}
+    ],
     "Diabetes Tipo 2": [
         {"nombre": "Bowl de Quinua y Pechuga al Limón", "precio_usd": 6.50},
         {"nombre": "Salmón al Horno con Vegetales", "precio_usd": 8.00},
@@ -187,14 +194,14 @@ st.markdown("---")
 # 4. MÓDULO PÚBLICO: REALIZAR PEDIDO
 # ==========================================
 if opcion == "🛒 Realizar Pedido":
-    st.header("🛒 Módulo de Pedidos Terapéuticos")
+    st.header("🛒 Módulo de Pedidos Terapéuticos y Fitness")
     st.info("💡 Su pago es procesado de forma centralizada y segura a través de la cuenta matriz de la empresa. La plataforma articula de forma automatizada la elaboración con la cocina aliada correspondiente.")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("1. Selección Médica y Menú")
-        patologia = st.selectbox("Condición Médica:", list(MENU_BASE.keys()))
+        st.subheader("1. Selección de Categoría y Menú")
+        patologia = st.selectbox("Objetivo / Condición:", list(MENU_BASE.keys()))
         
         platos_disponibles = MENU_BASE[patologia]
         opciones_platos = [f"{p['nombre']} - ${p['precio_usd']:.2f} USD" for p in platos_disponibles]
@@ -269,7 +276,7 @@ if opcion == "🛒 Realizar Pedido":
                 f"*[NUEVO PEDIDO NUTRISALUD DIGITAL]*\n\n"
                 f"👤 *Cliente:* {nombre_cliente} ({cedula_cliente})\n"
                 f"🍽️ *Plato:* {plato_obj['nombre']}\n"
-                f"🩺 *Condición:* {patologia}\n"
+                f"🏋️ *Categoría / Objetivo:* {patologia}\n"
                 f"📍 *Estado:* {estado_destino}\n"
                 f"🛵 *Modo:* {tipo_entrega}\n"
                 f"🏠 *Dirección:* {direccion}\n"
@@ -282,10 +289,10 @@ if opcion == "🛒 Realizar Pedido":
             
             mensaje_cliente = (
                 f"¡Hola *{nombre_cliente}*! 🥗\n\n"
-                f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para cuidar su salud y garantizarle una vida más saludable y equilibrada.\n\n"
-                f"✅ *Hemos recibido su pago (Ref: {ref_pago})* y su pedido ya se encuentra **en proceso de elaboración** bajo estrictos estándares clínicos:\n\n"
+                f"En nombre de *{DATOS_ADMIN['empresa']} (NutriSalud Digital)*, queremos agradecerle profundamente la confianza depositada en nosotros para impulsar su rendimiento físico y garantizarle una vida más saludable.\n\n"
+                f"✅ *Hemos recibido su pago (Ref: {ref_pago})* y su pedido ya se encuentra **en proceso de elaboración** bajo estrictos estándares de calidad:\n\n"
                 f"🍽️ *Plato:* {plato_obj['nombre']}\n"
-                f"🩺 *Condición:* {patologia}\n"
+                f"🏋️ *Objetivo:* {patologia}\n"
                 f"🛵 *Modalidad:* {tipo_entrega}\n"
                 f"⏳ *Tiempo estimado:* {tiempo_espera}\n\n"
                 f"Le estaremos notificando en cuanto su menú salga hacia su destino. ¡Gracias por confiar en nuestra tecnología y compromiso nutricional!"
@@ -387,7 +394,7 @@ elif opcion == "🤝 Módulo de Afiliación y Contratos B2B" and es_admin:
             """
             Al registrar y afiliar este establecimiento, el Representante Legal declara conocer y aceptar irrevocablemente:
             1. **Modelo Financiero:** Retención del 10% por parte de la plataforma tecnológica y liquidación del 90% neta al restaurante.
-            2. **Responsabilidad Sanitaria e Inocuidad:** El restaurante aliado asume plena, exclusiva e ineludible responsabilidad civil, penal y sanitaria sobre la manipulación, preparación, calidad bromatológica, gramajes, frescura e inocuidad de los alimentos entregados a los pacientes, liberando de toda responsabilidad a **COMPANIA HCHFA CA**.
+            2. **Responsabilidad Sanitaria e Inocuidad:** El restaurante aliado asume plena, exclusiva e ineludible responsabilidad civil, penal y sanitaria sobre la manipulación, preparación, calidad bromatológica, gramajes, frescura e inocuidad de los alimentos entregados a los pacientes y deportistas, liberando de toda responsabilidad a **COMPANIA HCHFA CA**.
             3. **Permisología:** El aliado garantiza poseer permisos sanitarios vigentes y cumplir con la Ley de Alimentación y normativas bromatológicas de la República Bolivariana de Venezuela.
             """
         )
@@ -444,7 +451,7 @@ elif opcion == "📄 Contrato Marco de Adhesión" and es_admin:
         ---
         
         **1. OBJETO DEL ACUERDO:**  
-        El presente contrato regula los términos y condiciones de la vinculación comercial entre **COMPANIA HCHFA CA** y las cocinas aliadas (*Dark Kitchens* / Restaurantes) que procesarán y despacharán menús clínicos y terapéuticos a través de la plataforma tecnológica **NutriSalud Digital**.
+        El presente contrato regula los términos y condiciones de la vinculación comercial entre **COMPANIA HCHFA CA** y las cocinas aliadas (*Dark Kitchens* / Restaurantes) que procesarán y despacharán menús clínicos, terapéuticos y de alto rendimiento para atletas a través de la plataforma tecnológica **NutriSalud Digital**.
 
         **2. MODELO FINANCIERO Y COMISIONES (90/10):**  
         * **Centralización de Pagos:** Todos los pagos realizados por los clientes finales son recaudados centralmente por **COMPANIA HCHFA CA**.
@@ -456,6 +463,6 @@ elif opcion == "📄 Contrato Marco de Adhesión" and es_admin:
         * El aliado garantiza contar con licencias sanitarias vigentes y cumplir de manera estricta con las leyes alimentarias y de sanidad de la República Bolivariana de Venezuela, eximiendo y blindando por completo a **COMPANIA HCHFA CA** ante cualquier eventualidad bromatológica o sanitaria.
 
         **4. CONFIDENCIALIDAD:**  
-        * Queda estrictamente prohibido el uso comercial externo o divulgación de la base de datos de pacientes, recetas o historiales clínicos gestionados a través de la plataforma.
+        * Queda estrictamente prohibido el uso comercial externo o divulgación de la base de datos de pacientes, atletas, recetas o historiales gestionados a través de la plataforma.
         """
     )
