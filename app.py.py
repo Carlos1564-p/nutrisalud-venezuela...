@@ -140,7 +140,7 @@ else:
     if modo_usuario == "Administración Central":
         st.sidebar.warning("⚠️ Ingrese la contraseña correcta para ver los módulos administrativos.")
 
-st.title("🥗 NutriSalud Digital")
+st.title("logonutrisalud.png")
 st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']}")
 st.markdown("---")
 
@@ -324,4 +324,3 @@ elif opcion == "📄 Contrato y Acuerdos Comerciales" and es_admin:
         **4. GARANTÍA DE CALIDAD Y TIEMPOS:**  
         * El restaurante aliado garantiza la elaboración de los menús conforme a las especificaciones clínicas (Diabetes, Renal, Hipertensión, Celiaquía) y respetando los tiempos de espera seleccionados por el cliente o la modalidad de entrega (Con o sin delivery).
         """
-    )
