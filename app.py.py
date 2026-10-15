@@ -102,7 +102,7 @@ MENU_BASE = {
 # ==========================================
 # 3. ENCABEZADO, LOGOTIPO Y TASA DE CAMBIO
 # ==========================================
-st.sidebar.image("logo agrodigitalvenezueladeinitivo.png", use_container_width=True)
+st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("⚙️ Panel de Control")
 
 tasa_dolar = st.sidebar.number_input(
