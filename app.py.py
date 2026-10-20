@@ -13,11 +13,24 @@ st.set_page_config(
     layout="wide"
 )
 
-# Inicializar Base de Datos SQLite y Estructuras de Costos
+# Inicializar Base de Datos SQLite, Estructuras y Configuración Global (Tasa 24/7)
 def init_db():
     conn = sqlite3.connect('nutrisalud_database.db')
     c = conn.cursor()
     
+    # Tabla de Configuración Global (Para persistencia de la Tasa BCV 24/7)
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS configuracion (
+            clave TEXT PRIMARY KEY,
+            valor TEXT NOT NULL
+        )
+    ''')
+    
+    # Inicializar tasa por defecto si no existe
+    c.execute("SELECT valor FROM configuracion WHERE clave = 'tasa_bcv'")
+    if not c.fetchone():
+        c.execute("INSERT INTO configuracion (clave, valor) VALUES ('tasa_bcv', '36.50')")
+
     # Tabla de Clientes
     c.execute('''
         CREATE TABLE IF NOT EXISTS clientes (
@@ -45,7 +58,7 @@ def init_db():
         )
     ''')
     
-    # Tabla de Catálogo de Menús y Costos (Modificable por Admin)
+    # Tabla de Catálogo de Menús y Costos
     c.execute('''
         CREATE TABLE IF NOT EXISTS menu_platos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +68,6 @@ def init_db():
         )
     ''')
     
-    # Poblar menú inicial si está vacío
     c.execute("SELECT COUNT(*) FROM menu_platos")
     if c.fetchone()[0] == 0:
         menu_inicial = [
@@ -98,7 +110,6 @@ def init_db():
         )
     ''')
     
-    # Migración de columnas de pedidos si es necesario
     c.execute("PRAGMA table_info(pedidos);")
     columnas_existentes = [col[1] for col in c.fetchall()]
     if "comision_plataforma_usd" not in columnas_existentes:
@@ -110,6 +121,22 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Funciones de lectura y escritura de la tasa persistente 24/7
+def obtener_tasa_db():
+    conn = sqlite3.connect('nutrisalud_database.db')
+    c = conn.cursor()
+    c.execute("SELECT valor FROM configuracion WHERE clave = 'tasa_bcv'")
+    resultado = c.fetchone()
+    conn.close()
+    return float(resultado[0]) if resultado else 36.50
+
+def actualizar_tasa_db(nueva_tasa):
+    conn = sqlite3.connect('nutrisalud_database.db')
+    c = conn.cursor()
+    c.execute("UPDATE configuracion SET valor = ? WHERE clave = 'tasa_bcv'", (str(nueva_tasa),))
+    conn.commit()
+    conn.close()
 
 # ==========================================
 # 2. CONFIGURACIÓN Y CONSTANTES
@@ -164,14 +191,10 @@ def obtener_menu_desde_db():
     return menu
 
 # ==========================================
-# 3. CONTROL DE ACCESO Y TASA BCV
+# 3. CONTROL DE ACCESO Y TASA BCV 24/7
 # ==========================================
 st.sidebar.image("logonutrisalud.png", use_container_width=True)
 st.sidebar.title("🔐 Panel de Control")
-
-# Control de Tasa del Dólar BCV (Por defecto o modificable por Admin)
-if 'tasa_bcv' not in st.session_state:
-    st.session_state.tasa_bcv = 36.50
 
 modo_usuario = st.sidebar.radio("Seleccione Perfil:", ["Público (Clientes)", "Administración Central"])
 
@@ -184,16 +207,27 @@ if modo_usuario == "Administración Central":
     elif pwd_ingresada != "":
         st.sidebar.error("❌ Contraseña incorrecta")
 
+# Obtener la tasa actual guardada en la base de datos (Persistencia 24/7)
+tasa_actual_db = obtener_tasa_db()
+
 if es_admin:
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Configuración Admin")
-    st.session_state.tasa_bcv = st.sidebar.number_input(
+    
+    nueva_tasa = st.sidebar.number_input(
         "Modificar Tasa del Dólar BCV (VES):", 
         min_value=1.0, 
-        value=st.session_state.tasa_bcv, 
+        value=tasa_actual_db, 
         step=0.50
     )
     
+    if nueva_tasa != tasa_actual_db:
+        actualizar_tasa_db(nueva_tasa)
+        st.sidebar.success(f"🔄 Tasa actualizada 24/7 a: {nueva_tasa:,.2f} VES")
+        tasa_activa = nueva_tasa
+    else:
+        tasa_activa = tasa_actual_db
+        
     opcion = st.sidebar.radio(
         "Módulos de Gestión", 
         [
@@ -205,12 +239,13 @@ if es_admin:
         ]
     )
 else:
+    tasa_activa = tasa_actual_db
     opcion = "🛒 Realizar Pedido"
     st.sidebar.markdown("---")
-    st.sidebar.info(f"📊 **Tasa Oficial BCV del Día:** {st.session_state.tasa_bcv:,.2f} VES/USD")
+    st.sidebar.info(f"📊 **Tasa Oficial BCV del Día:** {tasa_activa:,.2f} VES/USD")
 
 st.title("🥗 NutriSalud Digital")
-st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']} | Tasa BCV Oficial: {st.session_state.tasa_bcv:,.2f} VES/USD")
+st.caption(f"{DATOS_ADMIN['empresa']} | RIF: {DATOS_ADMIN['rif']} | Tasa BCV Oficial Vigente: {tasa_activa:,.2f} VES/USD")
 st.markdown("---")
 
 # ==========================================
@@ -218,7 +253,7 @@ st.markdown("---")
 # ==========================================
 if opcion == "🛒 Realizar Pedido":
     st.header("🛒 Módulo de Pedidos Terapéuticos y Fitness")
-    st.info(f"💡 Pagos centralizados a través de {DATOS_ADMIN['empresa']}. Tasa de conversión aplicada: {st.session_state.tasa_bcv:,.2f} VES por USD.")
+    st.info(f"💡 Pagos centralizados a través de {DATOS_ADMIN['empresa']}. Tasa de conversión activa 24/7: {tasa_activa:,.2f} VES por USD.")
     
     MENU_BASE = obtener_menu_desde_db()
     
@@ -234,7 +269,7 @@ if opcion == "🛒 Realizar Pedido":
         
         idx = opciones_platos.index(plato_seleccionado)
         plato_obj = platos_disponibles[idx]
-        precio_ves = plato_obj["precio_usd"] * st.session_state.tasa_bcv
+        precio_ves = plato_obj["precio_usd"] * tasa_activa
         
         st.success(f"💰 **Precio Ref:** ${plato_obj['precio_usd']:.2f} USD | **Total a Pagar:** {precio_ves:,.2f} VES")
 
@@ -261,7 +296,7 @@ if opcion == "🛒 Realizar Pedido":
         st.write(f"**RIF:** {DATOS_ADMIN['rif']}")
         st.write(f"**Banco:** {DATOS_ADMIN['banco']}")
         st.write(f"**Teléfono BDV:** {DATOS_ADMIN['telefono']}")
-        st.info(f"Monto exacto a transferir a la cuenta central: **{precio_ves:,.2f} VES**")
+        st.info(f"Monto exacto a transferir a la cuenta central: **{precio_ves:,.2f} VES** (Calculado con tasa BCV: {tasa_activa:,.2f})")
 
     ref_pago = st.text_input("Número de Referencia Pagomóvil BDV:")
 
@@ -305,7 +340,7 @@ if opcion == "🛒 Realizar Pedido":
                 f"🛵 *Modo:* {tipo_entrega}\n"
                 f"🏠 *Dirección:* {direccion}\n"
                 f"⏳ *Tiempo Espera:* {tiempo_espera}\n"
-                f"💵 *Monto Total:* ${monto_usd:.2f} USD ({precio_ves:,.2f} VES)\n"
+                f"💵 *Monto Total:* ${monto_usd:.2f} USD ({precio_ves:,.2f} VES a tasa {tasa_activa:,.2f})\n"
                 f"💳 *Ref BDV Central:* {ref_pago}\n"
                 f"🍳 *Cocina Asignada:* {aliado['nombre']}\n"
                 f"💼 *Liquidación Neta Aliado (90%):* ${pago_neto_aliado:.2f} USD"
@@ -386,7 +421,7 @@ elif opcion == "👤 Registro de Clientes" and es_admin:
         st.info("Aún no hay clientes registrados.")
 
 # ==========================================
-# 7. MÓDULO PRIVADO: GESTIÓN DE MENÚS Y COSTOS (NUEVO)
+# 7. MÓDULO PRIVADO: GESTIÓN DE MENÚS Y COSTOS
 # ==========================================
 elif opcion == "⚙️ Gestión de Menús y Costos" and es_admin:
     st.header("⚙️ Modificación de Estructura de Costos por Plato")
@@ -404,7 +439,6 @@ elif opcion == "⚙️ Gestión de Menús y Costos" and es_admin:
     with st.form("form_editar_precio"):
         plato_a_editar = st.selectbox("Seleccione el Platillo:", df_menu['nombre_plato'].tolist())
         
-        # Buscar precio actual
         precio_actual = float(df_menu[df_menu['nombre_plato'] == plato_a_editar]['precio_usd'].values[0])
         nuevo_precio_usd = st.number_input("Nuevo Precio en USD ($):", min_value=0.50, value=precio_actual, step=0.50)
         
